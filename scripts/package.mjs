@@ -35,6 +35,7 @@ function skipFile(name) {
 function collectFiles(dir, files = []) {
   for (const entry of readdirSync(dir)) {
     if (entry === ".git" || ignoreDirs.has(entry)) continue;
+    if (entry === "pdfjs" && path.basename(dir) === "public") continue;
     const full = path.join(dir, entry);
     const stat = statSync(full);
     if (stat.isDirectory()) {

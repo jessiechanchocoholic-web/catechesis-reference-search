@@ -20,18 +20,22 @@ import {
   AlertTriangle,
   RotateCcw,
   Image as ImageIcon,
+  Download,
+  FolderInput,
 } from "lucide-react";
 
 interface DocumentManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
   documents: CatechismDocument[];
-  onAddDocument: (doc: CatechismDocument) => void;
+  onAddDocument: (doc: CatechismDocument) => void | Promise<void>;
   onAddDocuments?: (docs: CatechismDocument[]) => void;
   onDeleteDocument: (id: string) => void;
   onBatchDeleteDocuments?: (ids: string[]) => void;
   onResetPresets: () => void;
   onPreviewDocument: (doc: CatechismDocument) => void;
+  onExportLibrary: () => void;
+  onImportLibrary: (file: File) => Promise<{ imported: number; total: number }>;
 }
 
 interface UploadQueueItem {
@@ -40,6 +44,7 @@ interface UploadQueueItem {
   name: string;
   size: number;
   status: "pending" | "processing" | "success" | "error";
+  progress?: string;
   errorMessage?: string;
   resultDoc?: CatechismDocument;
 }
@@ -70,6 +75,8 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
   onBatchDeleteDocuments,
   onResetPresets,
   onPreviewDocument,
+  onExportLibrary,
+  onImportLibrary,
 }) => {
   const [tab, setTab] = useState<"list" | "upload" | "paste">("upload");
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
@@ -91,11 +98,15 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
   const [pasteSourceMeta, setPasteSourceMeta] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   // Process a single file to produce a CatechismDocument
-  const processSingleFile = async (file: File): Promise<CatechismDocument> => {
+  const processSingleFile = async (
+    file: File,
+    onProgress?: (message: string) => void,
+  ): Promise<CatechismDocument> => {
     const isImage =
       file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name);
 
@@ -138,41 +149,11 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
         imageUrl: dataUrl,
       };
     } else if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-      // Read as base64 for backend PDF extraction
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const res = reader.result as string;
-          resolve(res.split(",")[1] || "");
-        };
-        reader.onerror = () => reject(new Error("無法讀取 PDF 檔案"));
-        reader.readAsDataURL(file);
-      });
-
-      const res = await fetch("/api/process-file", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileType: "application/pdf",
-          base64Data: base64,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "PDF 文字提取失敗");
-      }
-
+      const { extractPdfDocument } = await import("../services/pdfExtract");
+      const extracted = await extractPdfDocument(file, onProgress);
       return {
         id: `custom-doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        title: data.title || file.name.replace(/\.[^/.]+$/, ""),
-        category: data.category || "自訂教理文獻",
-        content: data.content || "",
-        sourceMeta: `由 PDF 上載：${file.name}`,
-        uploadedAt: new Date().toISOString(),
-        fileType: "pdf",
-        wordCount: data.wordCount || (data.content ? data.content.length : 0),
+        ...extracted,
       };
     } else {
       // Read plain text / markdown / csv / json
@@ -256,12 +237,14 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
       );
 
       try {
-        const createdDoc = await processSingleFile(item.file);
+        const createdDoc = await processSingleFile(item.file, (message) => {
+          setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, progress: message } : q)));
+        });
         successfullyCreatedDocs.push(createdDoc);
         successCount++;
 
         // Add document to library immediately so user can see it right away
-        onAddDocument(createdDoc);
+        await onAddDocument(createdDoc);
 
         // Mark current item as success
         setQueue((prev) =>
@@ -350,7 +333,7 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
   };
 
   // Manual paste submission
-  const handleManualPasteSubmit = (e: React.FormEvent) => {
+  const handleManualPasteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pasteTitle.trim() || !pasteContent.trim()) {
       setStatusMessage({ type: "error", text: "請輸入文獻標題與內容" });
@@ -368,7 +351,7 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
       wordCount: pasteContent.trim().length,
     };
 
-    onAddDocument(newDoc);
+    await onAddDocument(newDoc);
     setPasteTitle("");
     setPasteContent("");
     setPasteSourceMeta("");
@@ -576,11 +559,11 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
                   點擊或拖曳檔案至此進行批量上載
                 </h3>
                 <p className="text-xs text-stone-600 mt-1.5 max-w-md mx-auto">
-                  支援格式：<span className="font-semibold text-stone-800">.png, .jpg, .webp（主日福音插圖）、.pdf（簡報/講義）、.txt, .md, .json, .csv</span>
+                  支援格式：<span className="font-semibold text-stone-800">可一次選取多份 .pdf 教科書、.png/.jpg/.webp 福音插圖、.txt、.md、.json、.csv</span>
                 </p>
                 <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/70 text-amber-900 text-[11px] font-medium border border-amber-200/80">
                   <ImageIcon className="w-3.5 h-3.5 text-amber-700" />
-                  <span>聖經故事插圖動畫工作室福音圖：自動識別圖中文字解說、聖經章節標記與畫面情境</span>
+                  <span>PDF 先在瀏覽器抽出文字層；沒有文字的掃描頁會分批辨識（單次最多 60 頁）</span>
                 </div>
 
                 <input
@@ -605,7 +588,7 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
                       {isProcessingBatch && (
                         <span className="flex items-center gap-1 text-[11px] text-amber-700 font-medium">
                           <div className="w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
-                          <span>正在解析建立索引中...</span>
+                          <span>{processingItems[0]?.progress || "正在解析建立索引中..."}</span>
                         </span>
                       )}
                     </div>
@@ -715,7 +698,7 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
                                 {item.status === "processing" && (
                                   <span className="text-[11px] text-amber-700 flex items-center gap-1 font-medium">
                                     <div className="w-2.5 h-2.5 border border-amber-600 border-t-transparent rounded-full animate-spin" />
-                                    <span>提取內文並建立神學分類與引句索引...</span>
+                                    <span>{item.progress || "提取內文並建立神學分類與引句索引..."}</span>
                                   </span>
                                 )}
                                 {item.status === "success" && item.resultDoc && (
@@ -771,6 +754,52 @@ export const DocumentManagerModal: React.FC<DocumentManagerModalProps> = ({
           {/* TAB 2: CURRENT DOCUMENTS LIST */}
           {tab === "list" && (
             <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+                <p className="text-[11px] text-stone-600 leading-relaxed">
+                  文獻存在這部裝置的 IndexedDB，大書不會再受 localStorage 容量限制。匯出檔案後，可在另一部裝置匯入。
+                </p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={onExportLibrary}
+                    className="px-2.5 py-1 text-xs text-stone-700 hover:text-stone-900 hover:bg-white rounded border border-stone-300 flex items-center gap-1"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>匯出文獻庫</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => importInputRef.current?.click()}
+                    className="px-2.5 py-1 text-xs bg-stone-900 text-amber-100 hover:bg-stone-800 rounded flex items-center gap-1"
+                  >
+                    <FolderInput className="w-3.5 h-3.5" />
+                    <span>匯入文獻庫</span>
+                  </button>
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (!file) return;
+                      try {
+                        const result = await onImportLibrary(file);
+                        setStatusMessage({
+                          type: "success",
+                          text: `已匯入 ${result.imported} 份文獻，文獻庫現有 ${result.total} 份。`,
+                        });
+                      } catch (error) {
+                        setStatusMessage({
+                          type: "error",
+                          text: error instanceof Error ? error.message : "匯入失敗",
+                        });
+                      }
+                    }}
+                  />
+                </div>
+              </div>
               {/* Search & Batch Action Bar */}
               <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between pb-1">
                 <div className="relative flex-1 max-w-sm">

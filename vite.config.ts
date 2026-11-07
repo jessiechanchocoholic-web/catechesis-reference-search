@@ -64,9 +64,26 @@ function aistudioMediaPlugin(): Plugin {
 }
 // LINT.ThenChange(//depot/google3/java/com/google/alkali/boq/makersuite/applet_dev_service/templates/initializers/react_theme/vite.config.ts:aistudio_media_plugin)
 
+function pdfjsAssetPlugin(): Plugin {
+  const copyAssets = () => {
+    const source = path.resolve(__dirname, 'node_modules', 'pdfjs-dist');
+    const target = path.resolve(__dirname, 'public', 'pdfjs');
+    for (const folder of ['cmaps', 'standard_fonts', 'wasm']) {
+      const from = path.join(source, folder);
+      if (!fs.existsSync(from)) continue;
+      fs.cpSync(from, path.join(target, folder), { recursive: true });
+    }
+  };
+  return {
+    name: 'pdfjs-assets',
+    buildStart: copyAssets,
+    configureServer: copyAssets,
+  };
+}
+
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss(), aistudioMediaPlugin()],
+    plugins: [react(), tailwindcss(), aistudioMediaPlugin(), pdfjsAssetPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

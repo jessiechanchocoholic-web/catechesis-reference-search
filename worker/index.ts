@@ -14,12 +14,14 @@ import {
   poeWebSearchResponse,
   publicPoeError,
 } from "./poe.ts";
+import { parseOcrPages, splitOcrTranscript } from "./ocr.ts";
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
   POE_API_KEY?: string;
   MODEL?: string;
   WEB_SEARCH_MODEL?: string;
+  VISION_MODEL?: string;
 }
 
 const CANONICAL_SOURCES: WebSource[] = [
@@ -92,6 +94,10 @@ function modelName(env: Env): string {
 
 function webSearchModel(env: Env): string {
   return env.WEB_SEARCH_MODEL?.trim() || DEFAULT_WEB_SEARCH_MODEL;
+}
+
+function visionModel(env: Env): string {
+  return env.VISION_MODEL?.trim() || modelName(env);
 }
 
 function decodeArchive(): Uint8Array | null {
@@ -424,6 +430,44 @@ ${SIGAO_RULE}
   });
 }
 
+async function ocrPages(request: Request, env: Env): Promise<Response> {
+  const body = await readBody(request);
+  let pages;
+  try {
+    pages = parseOcrPages(body.pages);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "掃描頁請求無效" }, 400);
+  }
+  const fileName = typeof body.fileName === "string" && body.fileName.trim() ? body.fileName.trim() : "掃描頁";
+  const listed = pages.map((page) => page.page).join("、");
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text: `以下圖片是天主教教材 PDF「${fileName}」的掃描頁，頁碼依次是：${listed}。
+請逐頁照印刷原文謄錄，保留標題、條號、換行與標點。
+每一頁先單獨寫一行「【第N頁】」，N 必須用我提供的頁碼。
+不要寫評論、不要翻譯、不要把頁上的天主教用字改成基督教和合本。
+若某頁幾乎沒有文字，該頁只寫「【第N頁】」並加上「（本頁無可辨識文字）」。
+${SIGAO_RULE}`,
+    },
+  ];
+  for (const page of pages) {
+    content.push({ type: "text", text: `下一張圖是第 ${page.page} 頁。` });
+    content.push({
+      type: "image_url",
+      image_url: { url: `data:image/jpeg;base64,${page.imageBase64}` },
+    });
+  }
+
+  const response = await poeChat(env.POE_API_KEY, {
+    model: visionModel(env),
+    temperature: 0,
+    messages: [{ role: "user", content }],
+  });
+  const transcript = splitOcrTranscript(chatText(response), pages.map((page) => page.page));
+  return json({ pages: transcript });
+}
+
 async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
   if (request.method === "GET" && url.pathname === "/api/health") {
     return json({ status: "ok" });
@@ -439,6 +483,9 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   }
   if (request.method === "POST" && url.pathname === "/api/process-file") {
     return processFile(request, env);
+  }
+  if (request.method === "POST" && url.pathname === "/api/ocr-pages") {
+    return ocrPages(request, env);
   }
   return json({ error: "找不到此 API。" }, 404);
 }

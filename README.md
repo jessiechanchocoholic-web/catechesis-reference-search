@@ -12,7 +12,7 @@
 
 1. **雙方案對照**：自訂／預載文獻庫，與 Poe `Web-Search` 網際網路檢索並列。
 2. **預載文獻**：天主教教理四部分、思高本路加福音第十五章、梵二《教會憲章》。全部保留在 `src/data/sampleCatechism.ts`。
-3. **自訂資料庫**：PDF、TXT、Markdown、CSV、JSON 與福音插圖（PNG、JPG、WebP）上載、自動分類，IndexedDB／本機儲存。
+3. **自訂資料庫**：可一次選取多份 PDF。有文字層的 PDF 由瀏覽器 pdf.js 抽出中文（含 CMap）；掃描頁分批送 `VISION_MODEL` 做 OCR。文獻存在 IndexedDB，可匯出／匯入 JSON，方便換裝置。TXT、Markdown、CSV、JSON 與福音插圖仍然可用。
 4. **待細閱清單**與引用複製。
 5. **`/api/download-package`**：下載不含金鑰的專案原始碼 zip（建置時封進 Worker，不當成公開靜態檔）。
 
@@ -27,7 +27,7 @@
 | 建置指令 Build command | `npm run build` |
 | 部署指令 Deploy command | `npx wrangler deploy` |
 | 秘密 Secret 名稱 | `POE_API_KEY`（Encrypt，不要寫進 wrangler 變數或前端） |
-| 純文字變數（已寫在 `wrangler.jsonc`，可在控制台覆寫） | `MODEL` 預設 `Claude-Haiku-5.5`；`WEB_SEARCH_MODEL` 預設 `Web-Search` |
+| 純文字變數（已寫在 `wrangler.jsonc`，可在控制台覆寫） | `MODEL` 預設 `Claude-Haiku-5.5`；`WEB_SEARCH_MODEL` 預設 `Web-Search`；`VISION_MODEL` 預設 `Claude-Haiku-5.5`（掃描 PDF 辨識） |
 
 `POE_API_KEY` 請到 [poe.com/api/keys](https://poe.com/api/keys) 建立。每次 `npx wrangler deploy` 會套用 `wrangler.jsonc` 的 `MODEL` 與 `WEB_SEARCH_MODEL`。
 

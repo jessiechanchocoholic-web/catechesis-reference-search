@@ -14,17 +14,18 @@ import {
   ReadingListItem,
 } from "./types";
 import {
-  getStoredDocuments,
+  loadDocuments,
   saveDocument,
-  saveDocumentsBatch,
   deleteDocument,
   deleteDocumentsBatch,
-  resetToPresets,
+  restorePresets,
+  importDocuments,
   getReadingList,
   addToReadingList,
   removeFromReadingList,
   clearReadingList,
 } from "./services/storage";
+import { downloadLibraryFile, parseLibraryFile, toSearchPayload } from "./services/libraryFile";
 import {
   BookOpen,
   Database,
@@ -54,39 +55,60 @@ export default function App() {
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
   const [isReadingListOpen, setIsReadingListOpen] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<CatechismDocument | null>(null);
+  const [libraryReady, setLibraryReady] = useState(false);
 
   // Initialize storage
   useEffect(() => {
-    const loadedDocs = getStoredDocuments();
-    setDocuments(loadedDocs);
-    const loadedList = getReadingList();
-    setReadingList(loadedList);
+    let cancelled = false;
+    setReadingList(getReadingList());
+    loadDocuments()
+      .then((loadedDocs) => {
+        if (!cancelled) setDocuments(loadedDocs);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "無法讀取本機文獻庫";
+          setSearchError(message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLibraryReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Document management handlers
-  const handleAddDocument = (newDoc: CatechismDocument) => {
-    const updated = saveDocument(newDoc);
+  const handleAddDocument = async (newDoc: CatechismDocument) => {
+    const updated = await saveDocument(newDoc);
     setDocuments(updated);
   };
 
-  const handleBatchAddDocuments = (newDocs: CatechismDocument[]) => {
-    const updated = saveDocumentsBatch(newDocs);
-    setDocuments(updated);
+  const handleBatchAddDocuments = async (newDocs: CatechismDocument[]) => {
+    for (const doc of newDocs) {
+      await saveDocument(doc);
+    }
+    setDocuments(await loadDocuments());
   };
 
   const handleDeleteDocument = (id: string) => {
-    const updated = deleteDocument(id);
-    setDocuments(updated);
+    void deleteDocument(id).then(setDocuments).catch((error) => console.error(error));
   };
 
   const handleBatchDeleteDocuments = (ids: string[]) => {
-    const updated = deleteDocumentsBatch(ids);
-    setDocuments(updated);
+    void deleteDocumentsBatch(ids).then(setDocuments).catch((error) => console.error(error));
   };
 
   const handleResetPresets = () => {
-    const restored = resetToPresets();
-    setDocuments(restored);
+    void restorePresets().then(setDocuments).catch((error) => console.error(error));
+  };
+
+  const handleImportLibrary = async (file: File) => {
+    const incoming = parseLibraryFile(await file.text());
+    const updated = await importDocuments(incoming);
+    setDocuments(updated);
+    return { imported: incoming.length, total: updated.length };
   };
 
   // Reading list handlers
@@ -127,7 +149,7 @@ export default function App() {
           fetch("/api/search/custom", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query, documents }),
+            body: JSON.stringify({ query, documents: toSearchPayload(documents) }),
           }).then(async (res) => {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || "自訂資料庫檢索未成功");
@@ -174,7 +196,7 @@ export default function App() {
         const res = await fetch("/api/search/custom", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, documents }),
+          body: JSON.stringify({ query, documents: toSearchPayload(documents) }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "自訂資料庫檢索失敗");
@@ -227,6 +249,12 @@ export default function App() {
         />
 
         {/* Global Error Notice */}
+        {!libraryReady && !searchError && (
+          <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-600">
+            正在開啟本機文獻庫…
+          </div>
+        )}
+
         {searchError && (
           <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
@@ -533,6 +561,8 @@ export default function App() {
         onBatchDeleteDocuments={handleBatchDeleteDocuments}
         onResetPresets={handleResetPresets}
         onPreviewDocument={(doc) => setPreviewDoc(doc)}
+        onExportLibrary={() => downloadLibraryFile(documents)}
+        onImportLibrary={handleImportLibrary}
       />
 
       <DocumentPreviewModal

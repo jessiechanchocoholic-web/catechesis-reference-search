@@ -10,17 +10,18 @@
     "clean": "rm -rf dist .wrangler",
     "package": "node scripts/package.mjs",
     "lint": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test worker/*.test.ts",
+    "test": "node --experimental-strip-types --test worker/*.test.ts src/services/*.test.ts",
     "deploy:dry-run": "wrangler deploy --dry-run"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3",
-    "motion": "^12.23.24"
+    "vite": "^6.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

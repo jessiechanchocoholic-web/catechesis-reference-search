@@ -13,6 +13,7 @@
   // Plain vars only. POE_API_KEY is a Worker secret and must never be listed here.
   "vars": {
     "MODEL": "Claude-Haiku-5.5",
-    "WEB_SEARCH_MODEL": "Web-Search"
+    "WEB_SEARCH_MODEL": "Web-Search",
+    "VISION_MODEL": "Claude-Haiku-5.5"
   }
 }

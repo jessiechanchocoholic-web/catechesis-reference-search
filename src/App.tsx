@@ -128,27 +128,30 @@ export default function App() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query, documents }),
-          }).then((res) => {
-            if (!res.ok) throw new Error("自訂資料庫檢索未成功");
-            return res.json();
+          }).then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "自訂資料庫檢索未成功");
+            return data;
           }),
           fetch("/api/search/web", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query }),
-          }).then((res) => {
-            if (!res.ok) throw new Error("網際網路文獻檢索未成功");
-            return res.json();
+          }).then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "網際網路文獻檢索未成功");
+            return data;
           }),
         ]);
 
         if (customPromise.status === "fulfilled") {
           setCustomResult(customPromise.value);
         } else {
+          const reason = customPromise.reason?.message || "檢索自訂資料庫時發生異常，請檢查資料庫文件。";
           setCustomResult({
             sourceType: "custom",
             query,
-            summary: "檢索自訂資料庫時發生異常，請檢查資料庫文件。",
+            summary: reason,
             citations: [],
             totalMatches: 0,
             timestamp: new Date().toISOString(),
@@ -158,10 +161,11 @@ export default function App() {
         if (webPromise.status === "fulfilled") {
           setWebResult(webPromise.value);
         } else {
+          const reason = webPromise.reason?.message || "外部網際網路檢索暫時無法連通。";
           setWebResult({
             sourceType: "web",
             query,
-            librarianReport: "外部網際網路檢索暫時無法連通。",
+            librarianReport: reason,
             sources: [],
             timestamp: new Date().toISOString(),
           });

@@ -2,143 +2,70 @@
 
 這是一個專為天主教教理講授員、傳道員、神父、執事及牧靈工作者設計的權威教理與聖經引句搜尋器。
 
-系統採用客觀「教會圖書館參考館員」（Ecclesiastical Reference Librarian）定位架構，結合 **Google Gemini API** 多模態大語言模型，提供精確的教理條目定位、原文引句核對、多檔案批量文獻管理，以及聖經故事插圖動畫工作室主日福音圖視覺分析與引句索引。
+系統以「教會圖書館參考館員」定位：在自訂與預載文獻中抽出原文引句、章節與出處，並以 Poe 的 OpenAI 相容 API 做網際網路檢索。聖經引文要求沿用《思高聖經》用字（天主、聖神、瑪竇、馬爾谷、路加、若望），不改寫成和合本。
+
+正式環境部署在 **Cloudflare Workers**。前端 `vite build` 的 `dist/` 才是公開靜態資源；Worker 原始碼與 `POE_API_KEY` 不會放進靜態目錄。
 
 ---
 
-## ✨ 核心功能
+## 核心功能
 
-1. **三階檢索體系（Three-Tier Retrieval）**：
-   - 第一階：優先自訂教理文獻庫（堂區講義、講章、主日學教材、工作室福音圖）。
-   - 第二階：官方預載權威核心（天主教教理 CCC、思高聖經、梵二文獻、教會法典等）。
-   - 第三階：全球公教資料庫聯檢（Vatican.va、CCReadBible、CNA 等）。
-2. **多模態主日福音插圖辨識**：
-   - 支援直接批量上載 `.png`, `.jpg`, `.webp` 福音插圖。
-   - 自動 OCR 萃取圖中經文、解說文字與聖經章節標註。
-   - 自動索引插圖畫面聖經人物動作與教理情境。
-3. **多檔案批量文獻管理**：
-   - 支援 PDF、TXT、Markdown、CSV、JSON 批次拖曳上傳與自動分類。
-4. **離線與本機持久化**：
-   - 內建 IndexedDB / 本機儲存，自訂文獻與書籤研讀清單不遺失。
+1. **雙方案對照**：自訂／預載文獻庫，與 Poe `Web-Search` 網際網路檢索並列。
+2. **預載文獻**：天主教教理四部分、思高本路加福音第十五章、梵二《教會憲章》。全部保留在 `src/data/sampleCatechism.ts`。
+3. **自訂資料庫**：PDF、TXT、Markdown、CSV、JSON 與福音插圖（PNG、JPG、WebP）上載、自動分類，IndexedDB／本機儲存。
+4. **待細閱清單**與引用複製。
+5. **`/api/download-package`**：下載不含金鑰的專案原始碼 zip（建置時封進 Worker，不當成公開靜態檔）。
 
 ---
 
-## 🚀 快速開始（本機運行）
+## Cloudflare 控制台設定
 
-### 1. 環境需求
-- **Node.js**: v18.0.0 或更高版本（建議 v20+）
-- **npm** (或 pnpm / yarn / bun)
-- **Google Gemini API Key**（可至 [Google AI Studio](https://aistudio.google.com/app/apikey) 免費申請）
+以 GitHub 連接此儲存庫後，在 Workers Builds 使用：
 
-### 2. 安裝依賴
+| 項目 | 值 |
+| --- | --- |
+| 建置指令 Build command | `npm run build` |
+| 部署指令 Deploy command | `npx wrangler deploy` |
+| 秘密 Secret 名稱 | `POE_API_KEY`（Encrypt，不要寫進 wrangler 變數或前端） |
+| 純文字變數（已寫在 `wrangler.jsonc`，可在控制台覆寫） | `MODEL` 預設 `Claude-Haiku-5.5`；`WEB_SEARCH_MODEL` 預設 `Web-Search` |
+
+`POE_API_KEY` 請到 [poe.com/api/keys](https://poe.com/api/keys) 建立。每次 `npx wrangler deploy` 會套用 `wrangler.jsonc` 的 `MODEL` 與 `WEB_SEARCH_MODEL`。
+
+Poe 文件：
+
+- Chat Completions：`POST https://api.poe.com/v1/chat/completions`（[說明](https://creator.poe.com/docs/external-applications/openai-compatible-api)）
+- 模型欄位使用 Poe bot 名稱。預設文獻／PDF／圖片模型為 `Claude-Haiku-5.5`。
+- 網搜模式使用 Poe 官方會把網搜路由過去的 **`Web-Search`** bot，並從回應的連結、`citations`，以及（備援時）Responses API 的 `web_search_call.action.sources` 取出引用。Responses API 的內建網搜工具見同一份文件的 Web Search 一節與 [`include`](https://creator.poe.com/api-reference/createResponse)。
+
+---
+
+## 本機
+
+需要 Node.js 20+。
+
 ```bash
 npm install
-```
-
-### 3. 設定環境變數
-複製 `.env.example` 為 `.env`：
-```bash
-cp .env.example .env
-```
-編輯 `.env` 並填入您的 Gemini API Key：
-```env
-GEMINI_API_KEY="AIzaSy..."
-PORT=3000
-```
-
-### 4. 啟動開發伺服器
-```bash
+cp .dev.vars.example .dev.vars
+# 編輯 .dev.vars，填入 POE_API_KEY
 npm run dev
 ```
-瀏覽器開啟：`http://localhost:3000`
 
----
+驗證：
 
-## 📦 正式環境建置與運行 (Production)
-
-### 構建與啟動
 ```bash
-# 建置前端與後端
+npm test
 npm run build
-
-# 啟動正式伺服器
-npm start
-```
-伺服器將在 `http://localhost:3000` 運行。
-
----
-
-## 🐳 Docker 容器化部署
-
-本專案附帶標準 `Dockerfile`，可直接建置並運行：
-
-```bash
-# 建置 Docker 映像檔
-docker build -t catechesis-search .
-
-# 運行容器
-docker run -d -p 3000:3000 \
-  -e GEMINI_API_KEY="您的_GEMINI_API_KEY" \
-  --name catechesis-app \
-  catechesis-search
+npx wrangler deploy --dry-run
 ```
 
 ---
 
-## ☁️ 雲端平台遷移與部署指南
-
-### 1. Google Cloud Run
-可以直接使用 Cloud Build 或 Docker 映像檔部署：
-```bash
-gcloud run deploy catechesis-search \
-  --source . \
-  --region asia-east1 \
-  --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY="您的_API_KEY"
-```
-
-### 2. Render / Railway / Fly.io
-- 連接您的 Git 儲存庫（GitHub / GitLab）。
-- 設定 Build Command: `npm install && npm run build`
-- 設定 Start Command: `npm start`
-- 在後台環境變數（Environment Variables）中添加 `GEMINI_API_KEY`。
-
-### 3. VPS（Ubuntu / Debian 等虛擬主機）
-使用 PM2 常駐進程管理：
-```bash
-# 全域安裝 pm2
-npm install -g pm2
-
-# 安裝依賴並編譯
-npm install
-npm run build
-
-# 使用 pm2 啟動
-pm2 start dist/server.cjs --name "catechesis-search"
-pm2 save
-pm2 startup
-```
-
----
-
-## 📂 專案結構簡介
+## 專案結構
 
 ```text
-├── server.ts              # Express 後端：Gemini 搜尋代理、PDF/圖片 OCR、文件處理
-├── src/
-│   ├── App.tsx            # 主應用入口
-│   ├── components/        # UI 元件 (搜尋列、自訂文獻管理、引句卡片、研讀清單等)
-│   ├── services/          # API 調用、搜尋邏輯、IndexedDB 儲存服務
-│   ├── data/              # 官方預載核心教理文獻
-│   └── types.ts           # TypeScript 資料型別定義
-├── public/                # 靜態資源
-├── package.json           # 專案依賴與腳本
-├── vite.config.ts         # Vite 建置設定
-├── tsconfig.json          # TypeScript 設定
-└── Dockerfile             # Docker 容器建置設定
+├── worker/                # Cloudflare Worker（API；不會放進 dist）
+├── src/                   # React 前端與預載教理文獻
+├── wrangler.jsonc         # 靜態資源只指向 dist；不含 API 金鑰
+├── scripts/package.mjs    # 把不含密鑰的源碼 zip 嵌進 Worker
+└── package.json
 ```
-
----
-
-## 📜 授權與宣告
-本搜尋器以推廣聖經與天主教正統教理研讀為宗旨，所有引句均標註出處章節。自訂文獻與圖片儲存於使用者瀏覽器本機資料庫。

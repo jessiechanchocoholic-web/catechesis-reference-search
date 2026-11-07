@@ -1,7 +1,6 @@
 {
   "name": "教理講授資料搜尋器",
-  "description": "以自訂上載教理資料庫為基礎的參考館員搜尋器，支援自訂文件檢索、網際網路延伸檢索與清晰引用標示。",
+  "description": "以自訂上載教理資料庫為基礎的參考館員搜尋器，支援自訂文件檢索、Poe Web-Search 網際網路延伸檢索與清晰引用標示。部署於 Cloudflare Workers。",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }
-

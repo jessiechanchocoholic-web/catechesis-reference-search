@@ -120,7 +120,7 @@ export const SchemeSelector: React.FC<SchemeSelectorProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-stone-500 mt-0.5 leading-tight">
-              透過 Google Search 檢索梵蒂岡、全球教會官方文獻與思高經文
+              透過 Poe Web-Search 檢索梵蒂岡、全球教會官方文獻與思高經文
             </p>
           </div>
         </button>

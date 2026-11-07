@@ -217,7 +217,7 @@ export const WebLibrarianReportCard: React.FC<WebLibrarianReportProps> = ({
             🌐 網際網路全球文獻來源
           </span>
           <span className="text-xs text-stone-500 font-sans">
-            Google Search 權威驗證
+            Poe Web-Search 引用
           </span>
         </div>
         <span className="text-xs font-mono px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">

@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "catechesis-reference-search",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-04-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // Plain vars only. POE_API_KEY is a Worker secret and must never be listed here.
+  "vars": {
+    "MODEL": "Claude-Haiku-5.5",
+    "WEB_SEARCH_MODEL": "Web-Search"
+  }
+}
